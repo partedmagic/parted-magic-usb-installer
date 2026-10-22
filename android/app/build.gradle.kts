@@ -17,8 +17,8 @@ android {
         applicationId = "com.partedmagic.usbinstaller"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
         // The pmusb core is built for arm64 only (every phone with USB-C).
         ndk { abiFilters += listOf("arm64-v8a") }
     }

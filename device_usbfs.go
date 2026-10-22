@@ -60,8 +60,10 @@ const (
 	cbwSig     = 0x43425355 // "USBC"
 	cswSig     = 0x53425355 // "USBS"
 	bulkChunk  = 64 << 10   // one usbfs transfer; larger ones need a large kernel buffer
+	minChunk   = 4 << 10    // the smallest, one page, when the kernel is short of memory
 	cmdTimeout = 10000      // ms, for the command and status phases
 	ioTimeout  = 30000      // ms, per data chunk
+	busyLimit  = 60 * time.Second
 )
 
 type Device struct {
@@ -211,9 +213,21 @@ type usbMS struct {
 	small    [256]byte
 	blockLen int
 	blocks   uint64
+	chunk    int // the data transfer size now, bulkChunk unless memory was short
+	good     int // transfers since the size last changed
 }
 
-func (u *usbMS) bulk(ep uint32, b []byte, ms uint32) (int, error) {
+// refused: usbfs turned a transfer down before sending anything. ENOMEM
+// means the kernel had no buffer for it, EAGAIN no DMA mapping; both clear
+// up on their own. On a Galaxy Z Fold8 this stopped a write once, when the
+// app left the screen during a screen recording: "command 0x2a data: cannot
+// allocate memory". Nothing had reached the drive, so the transfer can be
+// sent again.
+func refused(err error) bool {
+	return errors.Is(err, unix.ENOMEM) || errors.Is(err, unix.EAGAIN)
+}
+
+func (u *usbMS) bulkOnce(ep uint32, b []byte, ms uint32) (int, error) {
 	x := bulkXfer{ep: ep, length: uint32(len(b)), timeout: ms}
 	if len(b) > 0 {
 		x.data = uintptr(unsafe.Pointer(&b[0]))
@@ -224,6 +238,37 @@ func (u *usbMS) bulk(ep uint32, b []byte, ms uint32) (int, error) {
 		return 0, e
 	}
 	return int(r), nil
+}
+
+// shortOfMemory notes the first refusal of a run in the log.
+var shortOfMemory sync.Once
+
+func noteRefused(err error) {
+	shortOfMemory.Do(func() {
+		emit("log", map[string]any{"message": "the system was short of memory for a USB transfer (" + err.Error() +
+			"); waiting and sending smaller transfers"})
+	})
+}
+
+// bulk moves one small transfer (a command or a status block). A refused
+// one is sent again after a pause, for up to busyLimit.
+func (u *usbMS) bulk(ep uint32, b []byte, ms uint32) (int, error) {
+	var since time.Time
+	pause := 20 * time.Millisecond
+	for {
+		n, err := u.bulkOnce(ep, b, ms)
+		if !refused(err) {
+			return n, err
+		}
+		noteRefused(err)
+		if since.IsZero() {
+			since = time.Now()
+		} else if time.Since(since) > busyLimit {
+			return n, err
+		}
+		time.Sleep(pause)
+		pause = min(2*pause, time.Second)
+	}
 }
 
 func (u *usbMS) clearHalt(ep uint32) {
@@ -240,18 +285,48 @@ func (u *usbMS) resetRecovery() {
 	u.clearHalt(u.out)
 }
 
-// transfer moves a data phase in chunks; the stick sees one stream.
+// transfer moves a data phase in chunks; the stick sees one stream, so a
+// phase can be cut at any chunk size. A refused chunk is sent again after a
+// pause at half the size, down to minChunk, since a smaller transfer needs
+// a smaller kernel buffer. The size doubles again after 256 transfers go
+// through. Refusals for busyLimit with nothing sent fail the phase.
 func (u *usbMS) transfer(ep uint32, b []byte) (int, error) {
+	if u.chunk == 0 {
+		u.chunk = bulkChunk
+	}
 	done := 0
+	var since time.Time
+	pause := 20 * time.Millisecond
 	for done < len(b) {
-		want := min(bulkChunk, len(b)-done)
-		n, err := u.bulk(ep, b[done:done+want], ioTimeout)
+		want := min(u.chunk, len(b)-done)
+		n, err := u.bulkOnce(ep, b[done:done+want], ioTimeout)
+		if refused(err) {
+			noteRefused(err)
+			if since.IsZero() {
+				since = time.Now()
+			} else if time.Since(since) > busyLimit {
+				return done, err
+			}
+			u.chunk = max(u.chunk/2, minChunk)
+			u.good = 0
+			time.Sleep(pause)
+			pause = min(2*pause, time.Second)
+			continue
+		}
+		since = time.Time{}
+		pause = 20 * time.Millisecond
 		done += n
 		if err != nil {
 			return done, err
 		}
 		if n < want { // a short packet ends the data phase
 			return done, nil
+		}
+		if u.chunk < bulkChunk {
+			if u.good++; u.good >= 256 {
+				u.chunk *= 2
+				u.good = 0
+			}
 		}
 	}
 	return done, nil

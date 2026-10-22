@@ -98,6 +98,7 @@ object State {
 
     val drives = mutableStateListOf<UsbDevice>()
     var selected by mutableStateOf<String?>(null) // deviceName
+    var probing: String? = null // deviceName while the core reads that drive
     var open: UsbDrive.Open? = null
     var drive by mutableStateOf<JSONObject?>(null) // the core's list-devices entry
     var driveStatus by mutableStateOf("")
@@ -307,12 +308,20 @@ class MainActivity : ComponentActivity() {
 
     private fun openDrive(dev: UsbDevice) {
         if (dev.deviceName != State.selected) return
+        // One drive check at a time. On the Fold8, after the window was
+        // rebuilt for a text size change, one permission answer started two
+        // checks of the same drive at once, and the second claim took the
+        // drive from the first in the middle of a command ("device or
+        // resource busy").
+        if (State.probing == dev.deviceName) return
+        State.probing = dev.deviceName
         State.driveStatus = "Reading the drive..."
         State.driveBad = false
         io.execute {
             val o = UsbDrive.open(usb, dev)
             if (o == null) {
                 runOnUiThread {
+                    if (State.probing == dev.deviceName) State.probing = null
                     State.driveStatus = "The drive could not be opened. Unplug it, plug it in again and tap it."
                     State.driveBad = true
                 }
@@ -331,6 +340,7 @@ class MainActivity : ComponentActivity() {
             } catch (_: Exception) {
             }
             runOnUiThread {
+                if (State.probing == dev.deviceName) State.probing = null
                 val d = found
                 if (d == null) {
                     o.close()
