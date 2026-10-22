@@ -14,6 +14,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import androidx.core.content.ContextCompat
 
 /**
@@ -40,11 +41,12 @@ class InstallService : Service() {
                 startForeground(NOTE_ID, n)
             }
         } catch (e: Exception) {
-            // connectedDevice needs the USB permission the app was granted;
-            // dataSync is the fallback if a phone refuses it anyway.
-            if (Build.VERSION.SDK_INT >= 29) {
-                startForeground(NOTE_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-            }
+            // connectedDevice needs the USB permission, which the app holds
+            // before Install can be tapped. If a phone refuses anyway, the
+            // write still runs; it is only not kept going with the screen off.
+            Log.w("pmusb", "foreground service refused: $e")
+            stopSelf()
+            return START_NOT_STICKY
         }
         if (wake == null) {
             wake = getSystemService(PowerManager::class.java)
