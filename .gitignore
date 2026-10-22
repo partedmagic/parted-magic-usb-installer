@@ -1,0 +1,7 @@
+/pmusb
+/*.exe
+/winres/rsrc_*.syso
+android/.gradle/
+android/app/build/
+android/app/src/main/jniLibs/
+android/local.properties

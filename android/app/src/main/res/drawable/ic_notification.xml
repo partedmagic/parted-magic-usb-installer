@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A USB stick, for the status bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M9,2h6v5H9z M10.25,3.5h1.25v1.25h-1.25z M12.5,3.5h1.25v1.25h-1.25z M7,7.5h10v11.5a2,2 0,0 1,-2 2h-6a2,2 0,0 1,-2 -2z"/>
+</vector>

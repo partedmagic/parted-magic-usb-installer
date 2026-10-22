@@ -1,0 +1,32 @@
+# github.com/diskfs/go-diskfs v1.9.4
+## explicit; go 1.25.0
+github.com/diskfs/go-diskfs/backend
+github.com/diskfs/go-diskfs/backend/file
+github.com/diskfs/go-diskfs/filesystem
+github.com/diskfs/go-diskfs/filesystem/fat12
+github.com/diskfs/go-diskfs/filesystem/fat32
+github.com/diskfs/go-diskfs/filesystem/iso9660
+github.com/diskfs/go-diskfs/partition/mbr
+github.com/diskfs/go-diskfs/partition/part
+github.com/diskfs/go-diskfs/util/timestamp
+github.com/diskfs/go-diskfs/version
+# github.com/djherbis/times v1.6.0
+## explicit; go 1.16
+github.com/djherbis/times
+# github.com/elliotwutingfeng/asciiset v0.0.0-20260129054604-cfde2086bc57
+## explicit; go 1.11
+github.com/elliotwutingfeng/asciiset
+# github.com/lxn/walk v0.0.0-20210112085537-c389da54e794
+## explicit
+github.com/lxn/walk
+github.com/lxn/walk/declarative
+# github.com/lxn/win v0.0.0-20210218163916-a377121e959e
+## explicit; go 1.12
+github.com/lxn/win
+# golang.org/x/sys v0.43.0
+## explicit; go 1.25.0
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+# gopkg.in/Knetic/govaluate.v3 v3.0.0
+## explicit
+gopkg.in/Knetic/govaluate.v3
