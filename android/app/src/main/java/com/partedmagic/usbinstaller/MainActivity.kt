@@ -339,7 +339,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     State.open = o
                     State.drive = d
-                    State.driveStatus = "${d.optString("Model")}, ${human(d.optDouble("Size"))}, USB"
+                    State.driveStatus = "${human(d.optDouble("Size"))}, USB"
                 }
             }
         }
@@ -478,7 +478,10 @@ class MainActivity : ComponentActivity() {
                 State.overallLine = "Overall: 100%"
                 State.fileLine = ""
                 State.resultKind = "done"
-                State.resultText = "${e.optString("message")}.\n$note Took ${secs / 60} min ${secs % 60} s.\n" +
+                // The core names the target "usb:"; say which drive it was.
+                val version = State.iso?.optString("Version") ?: ""
+                val model = State.drive?.optString("Model") ?: "the USB drive"
+                State.resultText = "Parted Magic $version written to $model.\n$note Took ${secs / 60} min ${secs % 60} s.\n" +
                     "The drive has been ejected. You can unplug it."
             }
         }
@@ -520,20 +523,22 @@ class MainActivity : ComponentActivity() {
         }
         BackHandler(enabled = State.running) { }
         Surface(Modifier.fillMaxSize()) {
+          // Cancel and Install sit in a bar under the scrolling part, so they
+          // stay on screen with large text (font scale 2.0 pushed them off).
+          Column(Modifier.fillMaxSize().systemBarsPadding()) {
             Column(
-                Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp),
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text("Parted Magic USB Installer", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
 
                 Text("Parted Magic ISO", fontWeight = FontWeight.SemiBold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        State.isoName.ifEmpty { "No ISO chosen" }, Modifier.weight(1f),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (State.isoName.isEmpty()) TxtDim else androidx.compose.ui.graphics.Color.Unspecified,
-                    )
-                    OutlinedButton(onClick = { pickIso.launch(arrayOf("*/*")) }, enabled = !State.running) { Text("Choose...") }
-                }
+                Text(
+                    State.isoName.ifEmpty { "No ISO chosen" },
+                    maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    color = if (State.isoName.isEmpty()) TxtDim else androidx.compose.ui.graphics.Color.Unspecified,
+                )
+                OutlinedButton(onClick = { pickIso.launch(arrayOf("*/*")) }, enabled = !State.running) { Text("Choose...") }
                 if (State.isoStatus.isNotEmpty()) {
                     Text(State.isoStatus, color = if (State.isoBad) BadRed else TxtDim, fontSize = 14.sp)
                 }
@@ -582,11 +587,6 @@ class MainActivity : ComponentActivity() {
                     SwitchRow("Include legacy BIOS boot loader (syslinux)", State.bios) { State.bios = it }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Spacer(Modifier.weight(1f))
-                    OutlinedButton(onClick = { cancelInstall() }, enabled = State.running) { Text("Cancel") }
-                    Button(onClick = { askInstall() }, enabled = ready()) { Text("Install") }
-                }
                 if (!ready() && !State.running) {
                     val d = State.drive
                     val i = State.iso
@@ -623,6 +623,15 @@ class MainActivity : ComponentActivity() {
                 }
                 Spacer(Modifier.height(24.dp))
             }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Spacer(Modifier.weight(1f))
+                OutlinedButton(onClick = { cancelInstall() }, enabled = State.running) { Text("Cancel") }
+                Button(onClick = { askInstall() }, enabled = ready()) { Text("Install") }
+            }
+          }
         }
 
         State.confirm?.let { text ->
