@@ -19,8 +19,10 @@ It runs on:
 ## How it is built
 
 One program in Go does the work on every system. It reads the ISO, lays out
-the drive, writes the FAT32 filesystem, installs the syslinux boot loader and
-checks the result. Each system adds a small part that finds and opens USB
+the drive, writes the FAT32 filesystem, installs the BIOS boot loader and
+checks the result. Parted Magic 26.10_4 and later boot BIOS computers with
+GRUB: the installer copies GRUB's boot.img and core.img from the ISO itself
+into the first sectors of the drive. Older ISOs get syslinux, as before. Each system adds a small part that finds and opens USB
 drives:
 
 | file | system | how it reaches the drive |
@@ -62,7 +64,8 @@ Exit codes: 0 ok, 2 usage, 3 refused by a safety check, 4 device error,
 ## License
 
 The installer is GPL-2.0-or-later (`COPYING`). It includes syslinux's
-installer code and boot loader, also GPL-2.0-or-later. The Android app also
+installer code and boot loader, also GPL-2.0-or-later. It contains no GRUB
+code: GRUB's boot images are read from the Parted Magic ISO. The Android app also
 uses AndroidX and Jetpack Compose, which are Apache-2.0, so the Android app
 as a whole is distributed under GPL-3.0-or-later (`android/LICENSE`). The
 third-party Go libraries are listed in `THIRD-PARTY-NOTICES.txt`.

@@ -110,7 +110,7 @@ func cmdInstall(args []string) {
 	labelStr := fs.String("label", "PMAGIC", "FAT volume label, 11 characters max")
 	volIDStr := fs.String("volume-id", "", "FAT volume id, 8 hex digits (default: derived)")
 	noVerify := fs.Bool("no-verify", false, "skip the read-back verification")
-	noBIOS := fs.Bool("no-bios", false, "UEFI-only stick: no syslinux payload")
+	noBIOS := fs.Bool("no-bios", false, "UEFI-only stick: no BIOS boot loader")
 	allowMismatch := fs.Bool("allow-module-mismatch", false, "install the BIOS payload even if the ISO's modules are from another syslinux build")
 	allowNonUSB := fs.Bool("allow-non-usb", false, "permit a non-USB target device")
 	allowFixed := fs.Bool("allow-fixed", false, "permit a USB device that reports fixed media")
@@ -139,6 +139,7 @@ func cmdInstall(args []string) {
 	if bios && !s.ModuleMatch && !*allowMismatch {
 		fail(3, "source", "this ISO's BIOS boot modules (boot/syslinux/ldlinux.c32) are from a different syslinux build than this installer's payload; update the installer, or pass --no-bios for a UEFI-only stick")
 	}
+	bi := s.bootInfo(bios)
 
 	emit("phase", map[string]any{"phase": "prepare"})
 	var t Target
@@ -177,9 +178,17 @@ func cmdInstall(args []string) {
 	if have := int64(g.clusters) * g.clusterBytes(); have < need {
 		fail(3, "prepare", fmt.Sprintf("drive too small: needs %d bytes, has %d", need, have))
 	}
-	mbrCode, err := s.readAll("boot/syslinux/mbr.bin")
-	if err != nil || len(mbrCode) != 440 {
-		fail(3, "source", "boot/syslinux/mbr.bin unreadable or not 440 bytes")
+	// Sector 0's code: GRUB's boot.img for a GRUB stick, else syslinux's
+	// mbr.bin, which a UEFI-only stick also carries when the ISO has it.  A
+	// UEFI-only stick from an ISO without mbr.bin gets no code at all.
+	var mbrCode []byte
+	if bi.Loader == loaderGRUB {
+		mbrCode = grubMBRCode(s.GrubBoot)
+	} else if mbrCode, err = s.readAll("boot/syslinux/mbr.bin"); err != nil || len(mbrCode) != 440 {
+		if bi.Loader == loaderSyslinux {
+			fail(3, "source", "boot/syslinux/mbr.bin unreadable or not 440 bytes")
+		}
+		mbrCode = make([]byte, 440)
 	}
 	var volID uint32
 	if *volIDStr != "" {
@@ -235,7 +244,7 @@ func cmdInstall(args []string) {
 	var opDone int64
 
 	emit("phase", map[string]any{"phase": "copy"})
-	hashes, err := populate(t, g, s, bios, &opDone, opTotal)
+	hashes, err := populate(t, g, s, bi, &opDone, opTotal)
 	if errors.Is(err, errCanceled) {
 		emit("canceled", map[string]any{"phase": "copy", "message": "canceled; the drive has no partition table"})
 		os.Exit(6)
@@ -255,13 +264,19 @@ func cmdInstall(args []string) {
 		fail(4, "copy", err.Error())
 	}
 
-	if bios {
+	switch bi.Loader {
+	case loaderSyslinux:
 		emit("phase", map[string]any{"phase": "bootloader"})
 		f, err := openFAT(t, g.partByte())
 		if err != nil {
 			fail(4, "bootloader", err.Error())
 		}
 		if err := installSyslinux(f, s.PayloadSys, s.PayloadBss); err != nil {
+			fail(4, "bootloader", err.Error())
+		}
+	case loaderGRUB:
+		emit("phase", map[string]any{"phase": "bootloader"})
+		if err := installGRUB(t, s.GrubCore); err != nil {
 			fail(4, "bootloader", err.Error())
 		}
 	}
@@ -272,7 +287,7 @@ func cmdInstall(args []string) {
 
 	if !*noVerify {
 		emit("phase", map[string]any{"phase": "verify"})
-		if err := verifyTarget(t, g.partByte(), hashes, bios, &opDone, opTotal); errors.Is(err, errCanceled) {
+		if err := verifyTarget(t, g.partByte(), hashes, bi, &opDone, opTotal); errors.Is(err, errCanceled) {
 			emit("canceled", map[string]any{"phase": "verify", "message": "canceled; the drive has no partition table"})
 			os.Exit(6)
 		} else if err != nil {
@@ -296,19 +311,24 @@ func cmdInstall(args []string) {
 	if _, err := t.ReadAt(back, 0); err != nil || !bytes.Equal(back, sec0) {
 		fail(4, "finish", "partition table read-back mismatch")
 	}
+	if bi.Loader == loaderGRUB {
+		if err := verifyGRUBMBR(back); err != nil {
+			fail(4, "finish", err.Error())
+		}
+	}
 	if dev != nil {
 		t.Close()
 		if err := rereadPartitions(dev.Path); err != nil {
 			emit("log", map[string]any{"phase": "finish", "message": "partition re-read failed: " + err.Error() + " (unplug and reconnect the drive)"})
 		}
 	}
-	emit("done", map[string]any{"phase": "finish", "message": fmt.Sprintf("Parted Magic %s written to %s", s.Version, *tgt), "verified": !*noVerify, "bios": bios})
+	emit("done", map[string]any{"phase": "finish", "message": fmt.Sprintf("Parted Magic %s written to %s", s.Version, *tgt), "verified": !*noVerify, "bios": bios, "loader": bi.Loader})
 }
 
 // populate writes the tree through go-diskfs opened at the partition offset:
 // directories, every file but the SQFS, ldlinux.sys, the SQFS last (one long
 // sequential run), then the manifest. Returns the SHA-256 of every copied file.
-func populate(t Target, g geom, s *Source, bios bool, opDone *int64, opTotal int64) (map[string]string, error) {
+func populate(t Target, g geom, s *Source, bi bootInfo, opDone *int64, opTotal int64) (map[string]string, error) {
 	fsys, err := fat32.Read(&targetStorage{t: t}, int64(g.psize)*512, g.partByte(), 512)
 	if err != nil {
 		return nil, fmt.Errorf("open FAT32 for writing: %w", err)
@@ -357,7 +377,7 @@ func populate(t Target, g geom, s *Source, bios bool, opDone *int64, opTotal int
 			return nil, err
 		}
 	}
-	if bios {
+	if bi.Loader == loaderSyslinux {
 		w, err := fsys.OpenFile(ldlinuxPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC)
 		if err != nil {
 			return nil, fmt.Errorf("create %s: %w", ldlinuxPath, err)
@@ -374,8 +394,7 @@ func populate(t Target, g geom, s *Source, bios bool, opDone *int64, opTotal int
 	}
 	// manifest
 	var mb strings.Builder
-	fmt.Fprintf(&mb, "pmusb-manifest 1\ninstaller %s\npayload %s\nlabel %s\nversion %s\nbuild %s\nsqfs %s\nbios %v\nfiles:\n",
-		version, s.payloadDesc(), s.Label, s.Version, s.Build, s.SQFS, bios)
+	mb.WriteString(manifestHeader(s, bi))
 	keys := make([]string, 0, len(hashes))
 	for k := range hashes {
 		keys = append(keys, k)

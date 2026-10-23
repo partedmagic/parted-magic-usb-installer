@@ -102,7 +102,7 @@ class App(Gtk.Window):
             box.pack_start(cb, False, False, 0)
             return cb
         self.verify = check("Verify after writing (recommended)", "verify", True)
-        self.bios = check("Include legacy BIOS boot loader (syslinux)", "bios", True)
+        self.bios = check("Include legacy BIOS boot loader", "bios", True)
         self.opt_fixed = check("Show USB hard drives", "show_fixed", False,
                                "USB devices that report fixed media, such as SSD enclosures, are hidden by default.")
         self.opt_all = check("Show all drives (not only USB)", "show_all", False,

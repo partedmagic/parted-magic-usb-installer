@@ -594,7 +594,7 @@ class MainActivity : ComponentActivity() {
                         enabled = !State.running,
                     )
                     SwitchRow("Verify after writing (recommended)", State.verify) { State.verify = it }
-                    SwitchRow("Include legacy BIOS boot loader (syslinux)", State.bios) { State.bios = it }
+                    SwitchRow("Include legacy BIOS boot loader", State.bios) { State.bios = it }
                 }
 
                 if (!ready() && !State.running) {

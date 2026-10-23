@@ -27,7 +27,7 @@ import (
 	"strings"
 )
 
-const version = "0.1"
+const version = "0.3"
 const payloadName = "syslinux 6.04-20250811 (Debian syslinux 3:6.04~git20190206.bf6db5b4+dfsg1-3.2)"
 
 var jsonOut bool

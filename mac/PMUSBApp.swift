@@ -93,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let drivePopup = NSPopUpButton()
     let labelField = NSTextField(string: "PMAGIC")
     let verifyCB = NSButton(checkboxWithTitle: "Verify after writing (recommended)", target: nil, action: nil)
-    let biosCB = NSButton(checkboxWithTitle: "Include legacy BIOS boot loader (syslinux)", target: nil, action: nil)
+    let biosCB = NSButton(checkboxWithTitle: "Include legacy BIOS boot loader", target: nil, action: nil)
     let fixedCB = NSButton(checkboxWithTitle: "Show USB hard drives", target: nil, action: nil)
     let allCB = NSButton(checkboxWithTitle: "Show all drives (not only USB)", target: nil, action: nil)
     let advancedBox = NSStackView()

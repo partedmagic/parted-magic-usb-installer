@@ -25,7 +25,7 @@ rsync -a --exclude '/pmusb' --exclude '/*.exe' --exclude '/signed/' --exclude '/
     --exclude 'android/play-store/' --exclude 'android/release/' "$here/../" "$work/pmusb/"
 cd "$work/pmusb/android"
 PM_KEYSTORE=$key PM_KEYSTORE_PASSWORD=$pw \
-    GO=/media/slackware15/usr/lib64/go1.27.2/go/bin/go GOTOOLCHAIN=local \
+    GO=/media/slackware15/usr/lib64/go1.27.3/go/bin/go GOTOOLCHAIN=local \
     JAVA_HOME=/opt/jdk-17.0.19+10 ANDROID_HOME=/opt/android-sdk \
     sh build-android.sh release
 unset pw

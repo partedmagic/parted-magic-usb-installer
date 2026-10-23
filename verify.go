@@ -29,8 +29,8 @@ import (
 )
 
 // verifyTarget reads the stick back through the core's own FAT reader and
-// checks structure, every file's hash, and the syslinux installation.
-func verifyTarget(t Target, pb int64, hashes map[string]string, bios bool, opDone *int64, opTotal int64) error {
+// checks structure, every file's hash, and the BIOS boot loader.
+func verifyTarget(t Target, pb int64, hashes map[string]string, bi bootInfo, opDone *int64, opTotal int64) error {
 	f, err := openFAT(t, pb)
 	if err != nil {
 		return err
@@ -142,8 +142,11 @@ func verifyTarget(t Target, pb int64, hashes map[string]string, bios bool, opDon
 			return fmt.Errorf("verification failed at %s: content differs from the source", p)
 		}
 	}
-	if bios {
+	switch bi.Loader {
+	case loaderSyslinux:
 		return verifySyslinux(f)
+	case loaderGRUB:
+		return verifyGRUB(t, bi.CoreHash, bi.CoreSectors)
 	}
 	return nil
 }
@@ -257,7 +260,7 @@ func cmdVerify(args []string) {
 		fail(5, "verify", err.Error())
 	}
 	hashes := map[string]string{}
-	bios := false
+	var bi bootInfo
 	inFiles := false
 	sc := bufio.NewScanner(&buf)
 	for sc.Scan() {
@@ -269,14 +272,19 @@ func cmdVerify(args []string) {
 			}
 		case line == "files:":
 			inFiles = true
-		case strings.HasPrefix(line, "bios "):
-			bios = strings.TrimSpace(line[5:]) == "true"
+		default:
+			parseBootLine(line, &bi)
 		}
 	}
 	var opDone int64
-	if err := verifyTarget(t, pb, hashes, bios, &opDone, 0); err != nil {
+	if err := verifyTarget(t, pb, hashes, bi, &opDone, 0); err != nil {
 		fail(5, "verify", err.Error())
 	}
-	emit("done", map[string]any{"phase": "verify", "message": fmt.Sprintf("%d files verified, bios=%v", len(hashes), bios)})
+	if bi.Loader == loaderGRUB {
+		if err := verifyGRUBMBR(sec0); err != nil {
+			fail(5, "verify", err.Error())
+		}
+	}
+	emit("done", map[string]any{"phase": "verify", "message": fmt.Sprintf("%d files verified, bios=%v, loader=%s", len(hashes), bi.Loader != loaderNone, bi.Loader)})
 	os.Exit(0)
 }

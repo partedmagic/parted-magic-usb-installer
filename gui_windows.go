@@ -90,7 +90,7 @@ func runGUI() {
 				PushButton{Text: "Refresh", OnClicked: g.refresh},
 			}},
 			CheckBox{AssignTo: &g.verifyCB, Alignment: AlignHNearVCenter, Text: "Verify after writing (recommended)", Checked: true},
-			CheckBox{AssignTo: &g.biosCB, Alignment: AlignHNearVCenter, Text: "Include legacy BIOS boot loader (syslinux)", Checked: true},
+			CheckBox{AssignTo: &g.biosCB, Alignment: AlignHNearVCenter, Text: "Include legacy BIOS boot loader", Checked: true},
 			CheckBox{AssignTo: &g.fixedCB, Alignment: AlignHNearVCenter, Text: "Show USB hard drives", OnCheckedChanged: g.refresh},
 			CheckBox{AssignTo: &g.allCB, Alignment: AlignHNearVCenter, Text: "Show all drives (not only USB)", OnCheckedChanged: g.refresh},
 			Composite{Layout: HBox{}, Children: []Widget{

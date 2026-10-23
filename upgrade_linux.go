@@ -36,7 +36,9 @@ import (
 
 // Upgrade in place (design section 5): keep the saved session, bundles and the
 // user's own files, replace Parted Magic. The copy goes through the kernel's
-// vfat driver on a temporary mount; the syslinux step runs raw afterward.
+// vfat driver on a temporary mount; the boot loader step runs raw afterward.
+// A stick that had a BIOS loader gets the new ISO's: an older syslinux stick
+// upgraded to a GRUB ISO becomes a GRUB stick.
 func cmdUpgrade(args []string) {
 	fs := flag.NewFlagSet("upgrade", flag.ExitOnError)
 	src := fs.String("source", "", "ISO file or extracted tree")
@@ -91,6 +93,10 @@ func cmdUpgrade(args []string) {
 	bios := oldBIOS
 	if bios && !s.ModuleMatch && !*allowMismatch {
 		fail(3, "source", "this ISO's BIOS boot modules are from a different syslinux build than this installer's payload; update the installer")
+	}
+	bi := s.bootInfo(bios)
+	if bi.Loader == loaderGRUB && pb/512 < grubCoreLBA+int64(bi.CoreSectors) {
+		fail(3, "prepare", "the partition starts too early for GRUB's core image; use install for a fresh copy")
 	}
 	sessionD, _ := f.lookup("pmagic/pmodules/099-saved-session.sqfm")
 	if sessionD != nil && oldVersion != s.Version && !*deleteSession {
@@ -213,7 +219,7 @@ func cmdUpgrade(args []string) {
 			fail(4, "copy", err.Error())
 		}
 	}
-	if bios {
+	if bi.Loader == loaderSyslinux {
 		if err := os.WriteFile(filepath.Join(mnt, filepath.FromSlash(ldlinuxPath)), ldlinuxSysContent(s.PayloadSys), 0644); err != nil {
 			fail(4, "copy", err.Error())
 		}
@@ -222,8 +228,7 @@ func cmdUpgrade(args []string) {
 		fail(4, "copy", err.Error())
 	}
 	var mb strings.Builder
-	fmt.Fprintf(&mb, "pmusb-manifest 1\ninstaller %s\npayload %s\nlabel %s\nversion %s\nbuild %s\nsqfs %s\nbios %v\nfiles:\n",
-		version, s.payloadDesc(), s.Label, s.Version, s.Build, s.SQFS, bios)
+	mb.WriteString(manifestHeader(s, bi))
 	keys := make([]string, 0, len(hashes))
 	for k := range hashes {
 		keys = append(keys, k)
@@ -238,19 +243,38 @@ func cmdUpgrade(args []string) {
 	unix.Sync()
 	um()
 
-	// Raw part: syslinux, FSInfo, verify.
+	// Raw part: boot loader, FSInfo, verify.
 	t, err := openRWTarget(dev)
 	if err != nil {
 		fail(4, "bootloader", err.Error())
 	}
 	defer t.Close()
-	if bios {
+	switch bi.Loader {
+	case loaderSyslinux:
 		emit("phase", map[string]any{"phase": "bootloader"})
 		f, err := openFAT(t, pb)
 		if err != nil {
 			fail(4, "bootloader", err.Error())
 		}
 		if err := installSyslinux(f, s.PayloadSys, s.PayloadBss); err != nil {
+			fail(4, "bootloader", err.Error())
+		}
+		// A stick going back from GRUB to syslinux needs syslinux's MBR code.
+		if code, err := s.readAll("boot/syslinux/mbr.bin"); err == nil && len(code) == 440 {
+			sec0 := make([]byte, 512)
+			if _, err := t.ReadAt(sec0, 0); err == nil && !bytes.Equal(sec0[:440], code) {
+				copy(sec0, code)
+				if _, err := t.WriteAt(sec0, 0); err != nil {
+					fail(4, "bootloader", err.Error())
+				}
+			}
+		}
+	case loaderGRUB:
+		emit("phase", map[string]any{"phase": "bootloader"})
+		if err := installGRUB(t, s.GrubCore); err != nil {
+			fail(4, "bootloader", err.Error())
+		}
+		if err := writeGRUBMBRCode(t, s.GrubBoot); err != nil {
 			fail(4, "bootloader", err.Error())
 		}
 	}
@@ -266,11 +290,11 @@ func cmdUpgrade(args []string) {
 	}
 	if !*noVerify {
 		emit("phase", map[string]any{"phase": "verify"})
-		if err := verifyTarget(t, pb, hashes, bios, &done, opTotal); err != nil {
+		if err := verifyTarget(t, pb, hashes, bi, &done, opTotal); err != nil {
 			fail(5, "verify", err.Error())
 		}
 	}
-	emit("done", map[string]any{"phase": "finish", "message": fmt.Sprintf("Parted Magic %s upgraded to %s on %s", oldVersion, s.Version, *tgt), "verified": !*noVerify, "bios": bios})
+	emit("done", map[string]any{"phase": "finish", "message": fmt.Sprintf("Parted Magic %s upgraded to %s on %s", oldVersion, s.Version, *tgt), "verified": !*noVerify, "bios": bios, "loader": bi.Loader})
 }
 
 func readFATFile(f *fatFS, p string) ([]byte, error) {

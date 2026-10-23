@@ -85,6 +85,12 @@ type Source struct {
 	PayloadSys  []byte
 	PayloadBss  []byte
 	PayloadFrom string
+	// Loader is the BIOS boot loader the ISO is made for: loaderGRUB when it
+	// ships boot/grub/i386-pc with boot.img and core.img (26.10_4 on), else
+	// loaderSyslinux.  GrubBoot and GrubCore are the ISO's own images.
+	Loader   string
+	GrubBoot []byte
+	GrubCore []byte
 }
 
 // Two release-naming schemes: the date form used until 2026-09
@@ -247,10 +253,34 @@ func (s *Source) validate() error {
 	} else {
 		s.SQFS = sqfs[0]
 	}
-	for _, req := range []string{"pmagic/bzImage", "pmagic/initrd.img", "boot/syslinux/syslinux.cfg", "boot/syslinux/ldlinux.c32",
-		"boot/syslinux/mbr.bin", "boot/grub/grub.cfg", "EFI/boot/bootx64.efi", "EFI/boot/grubx64.efi", "EFI/boot/mmx64.efi"} {
+	// An ISO with GRUB's BIOS files boots BIOS through GRUB, even while it
+	// still carries boot/syslinux for older installers.  Without them it is
+	// a syslinux ISO (26.10_3 and older), and the syslinux files are required.
+	if s.has(grubBootImg) || s.has(grubCoreImg) {
+		s.Loader = loaderGRUB
+	} else {
+		s.Loader = loaderSyslinux
+	}
+	reqs := []string{"pmagic/bzImage", "pmagic/initrd.img", "boot/grub/grub.cfg", "EFI/boot/bootx64.efi", "EFI/boot/grubx64.efi", "EFI/boot/mmx64.efi"}
+	if s.Loader == loaderGRUB {
+		reqs = append(reqs, "boot/grub/bios.cfg", grubBootImg, grubCoreImg, grubDir+"/normal.mod")
+	} else {
+		reqs = append(reqs, "boot/syslinux/syslinux.cfg", "boot/syslinux/ldlinux.c32", "boot/syslinux/mbr.bin")
+	}
+	for _, req := range reqs {
 		if !s.has(req) {
 			probs = append(probs, "missing "+req)
+		}
+	}
+	if s.Loader == loaderGRUB && s.has(grubBootImg) && s.has(grubCoreImg) {
+		boot, err1 := s.readAll(grubBootImg)
+		core, err2 := s.readAll(grubCoreImg)
+		if err1 != nil || err2 != nil {
+			probs = append(probs, "GRUB's boot.img or core.img is unreadable")
+		} else if err := checkGRUB(boot, core); err != nil {
+			probs = append(probs, err.Error())
+		} else {
+			s.GrubBoot, s.GrubCore = boot, core
 		}
 	}
 	if e, ok := s.byPath["boot/grub/x86_64-efi"]; !ok || !e.dir {
@@ -276,6 +306,10 @@ func (s *Source) validate() error {
 		// A payload shipped beside the modules matches them by construction.
 		s.ModuleMatch = s.PayloadFrom == "source" || s.moduleHash == strings.TrimSpace(expectedLdlinuxC32)
 	}
+	if s.Loader == loaderGRUB {
+		// boot.img and core.img come from the ISO beside its modules.
+		s.ModuleMatch = true
+	}
 	if len(probs) > 0 {
 		return errors.New("not a usable Parted Magic source: " + strings.Join(probs, "; "))
 	}
@@ -288,9 +322,13 @@ type summary struct {
 	Bytes, RequiredBytes                int64
 	BIOSModulesMatch                    bool
 	Payload, PayloadFrom                string
+	BIOSLoader                          string
 }
 
 func (s *Source) payloadDesc() string {
+	if s.Loader == loaderGRUB {
+		return "GRUB boot.img and core.img shipped in the source (boot/grub/i386-pc)"
+	}
 	if s.PayloadFrom == "source" {
 		return "ldlinux.sys and ldlinux.bss shipped in the source (boot/syslinux)"
 	}
@@ -300,7 +338,7 @@ func (s *Source) payloadDesc() string {
 func (s *Source) summary() summary {
 	return summary{Source: s.path, Label: s.Label, Version: s.Version, Build: s.Build, SQFS: s.SQFS,
 		Files: s.Files, Dirs: s.Dirs, Bytes: s.Bytes, RequiredBytes: requiredBytes(s.entries, 32*1024),
-		BIOSModulesMatch: s.ModuleMatch, Payload: s.payloadDesc(), PayloadFrom: s.PayloadFrom}
+		BIOSModulesMatch: s.ModuleMatch, Payload: s.payloadDesc(), PayloadFrom: s.PayloadFrom, BIOSLoader: s.Loader}
 }
 
 // skipped: ISO-only artifacts that must not land on a stick (design section 2).
