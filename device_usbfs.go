@@ -213,8 +213,9 @@ type usbMS struct {
 	small    [256]byte
 	blockLen int
 	blocks   uint64
-	chunk    int // the data transfer size now, bulkChunk unless memory was short
-	good     int // transfers since the size last changed
+	chunk    int  // the data transfer size now, bulkChunk unless memory was short
+	good     int  // transfers since the size last changed
+	loaded   bool // testUnitReady loaded an ejected stick
 }
 
 // refused: usbfs turned a transfer down before sending anything. ENOMEM
@@ -422,17 +423,32 @@ func (u *usbMS) requestSense(op byte) error {
 	return &senseError{op: op, key: b[2] & 0x0f, asc: b[12], ascq: b[13]}
 }
 
+// testUnitReady waits for the drive.  A stick ejected at the end of a run
+// answers MEDIUM NOT PRESENT (2/3a) until it is loaded again, so it gets
+// one START STOP UNIT with LoEj and Start (load) before the wait goes on,
+// and u.loaded records that it was loaded here.
 func (u *usbMS) testUnitReady() error {
 	var err error
+	tried := false
 	for i := 0; i < 20; i++ {
 		if err = u.command(make([]byte, 6), nil, false, true); err == nil {
+			u.loaded = tried
 			return nil
 		}
 		var se *senseError
 		if !errors.As(err, &se) {
 			return err
 		}
+		if se.key == 0x02 && se.asc == 0x3a && !tried {
+			tried = true
+			u.command([]byte{0x1b, 0, 0, 0, 0x03, 0}, nil, false, true)
+			continue
+		}
 		time.Sleep(250 * time.Millisecond)
+	}
+	var se *senseError
+	if errors.As(err, &se) && se.key == 0x02 && se.asc == 0x3a {
+		return errors.New("the drive is not ready: it was ejected or has no media; unplug it and plug it back in")
 	}
 	return fmt.Errorf("the drive is not ready: %v", err)
 }
@@ -567,9 +583,14 @@ func openUSB() (*usbMS, *Device, error) {
 }
 
 func listDevices(all, fixed bool, sourcePath string) ([]Device, error) {
-	_, d, err := openUSB()
+	u, d, err := openUSB()
 	if err != nil {
 		return nil, err
+	}
+	// A stick loaded only to be looked at is ejected again, so the phone
+	// does not mount it; an install loads it again.
+	if u.loaded {
+		u.eject()
 	}
 	if !fixed && !d.Removable {
 		return nil, nil
@@ -647,6 +668,9 @@ func (t *usbStick) Close() error {
 	}
 	t.done = true
 	if t.ro {
+		if t.u.loaded {
+			t.u.eject()
+		}
 		return nil
 	}
 	err := t.c.flushAll()
