@@ -13,7 +13,9 @@ It runs on:
 - Windows 10 and 11: `pmusb-gui.exe`, in the `install` folder of the
   Parted Magic ISO
 - Linux: packages in the same folder (`.deb`, `.rpm`, Slackware `.txz`)
-- macOS on Apple silicon: an app (in testing)
+- macOS 26.5 and later on Apple silicon: an app in a `.dmg` on the
+  Releases page, signed with Parted Magic's Developer ID and notarized by
+  Apple
 - Android phones and tablets with USB host support: an app (in testing)
 
 ## How it is built
@@ -41,9 +43,15 @@ runs the same program and reads its progress as JSON lines.
 Go 1.26 or later. The Go dependencies are in `vendor/`.
 
 - `./build.sh`: the Linux program and the Windows executables
-- `mac/build-mac.sh CORE OUTDIR`: on a Mac with the Command Line Tools.
-  `CORE` is the program built with
-  `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build`.
+- `mac/build-mac.sh CORE OUTDIR [IDENTITY]`: on a Mac with the Command
+  Line Tools. `CORE` is the program built with
+  `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build`. With no `IDENTITY`
+  the app is signed ad hoc, for testing on that Mac.
+- `mac/release-mac.sh CORE OUTDIR`: the release `.dmg`, signed with a
+  Developer ID Application certificate, notarized and stapled. Run it in
+  Terminal on the Mac. It needs the certificate in the login keychain and
+  a `notarytool` profile. `mac/make-csr.swift` makes the key and the
+  certificate request.
 - `android/build-android.sh`: needs JDK 17 and the Android SDK
   (`JAVA_HOME`, `ANDROID_HOME`). It builds the program for android/arm64
   and puts it in the app.

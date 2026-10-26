@@ -1,14 +1,17 @@
 #!/bin/sh
 # Builds "Parted Magic USB Installer.app" on a Mac with the Command Line Tools.
-# Usage: build-mac.sh PMUSB_CORE OUTDIR
+# Usage: build-mac.sh PMUSB_CORE OUTDIR [IDENTITY]
 #   PMUSB_CORE  the darwin/arm64 pmusb core (cross-built on the host:
 #               GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build)
 #   OUTDIR      where the .app goes
-# Signs ad hoc only; the Developer ID signature and notarization come later.
+#   IDENTITY    a Developer ID Application identity in the keychain: the core
+#               and the app are signed with it, with the hardened runtime and
+#               a secure timestamp, as notarization needs (release-mac.sh).
+#               Without it both are signed ad hoc, for testing on this Mac.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
-core=$1; out=$2
-[ -x "$core" ] && [ -n "$out" ] || { echo "usage: $0 PMUSB_CORE OUTDIR" >&2; exit 2; }
+core=$1; out=$2; id=${3:-}
+[ -x "$core" ] && [ -n "$out" ] || { echo "usage: $0 PMUSB_CORE OUTDIR [IDENTITY]" >&2; exit 2; }
 app="$out/Parted Magic USB Installer.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
@@ -26,6 +29,13 @@ for s in 16 32 128 256 512; do
     sips -z $d $d "$here/pmusb_icon_1024.png" --out "$set_dir/icon_${s}x${s}@2x.png" >/dev/null
 done
 iconutil -c icns "$set_dir" -o "$app/Contents/Resources/pmusb.icns"
-codesign --force --sign - "$app/Contents/MacOS/pmusb"
-codesign --force --sign - "$app"
+# The core first, then the app that seals it.
+if [ -n "$id" ]; then
+    codesign --force --options runtime --timestamp --identifier com.partedmagic.usbinstaller.pmusb \
+        --sign "$id" "$app/Contents/MacOS/pmusb"
+    codesign --force --options runtime --timestamp --sign "$id" "$app"
+else
+    codesign --force --sign - "$app/Contents/MacOS/pmusb"
+    codesign --force --sign - "$app"
+fi
 shasum -a 256 "$app/Contents/MacOS/PMUSBInstaller" "$app/Contents/MacOS/pmusb"
