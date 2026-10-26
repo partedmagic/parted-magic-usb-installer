@@ -13,10 +13,11 @@ It runs on:
 - Windows 10 and 11: `pmusb-gui.exe`, in the `install` folder of the
   Parted Magic ISO
 - Linux: packages in the same folder (`.deb`, `.rpm`, Slackware `.txz`)
-- macOS 26.5 and later on Apple silicon: an app in a `.dmg` on the
-  Releases page, signed with Parted Magic's Developer ID and notarized by
+- macOS 26.5 and later on Apple silicon: an app in a `.dmg`, in the same
+  folder and on the Releases page, signed with Parted Magic's Developer ID and notarized by
   Apple
-- Android phones and tablets with USB host support: an app (in testing)
+- Android phones and tablets with USB host support: the app on Google
+  Play
 
 ## How it is built
 
@@ -24,7 +25,11 @@ One program in Go does the work on every system. It reads the ISO, lays out
 the drive, writes the FAT32 filesystem, installs the BIOS boot loader and
 checks the result. Parted Magic 26.10_4 and later boot BIOS computers with
 GRUB: the installer copies GRUB's boot.img and core.img from the ISO itself
-into the first sectors of the drive. Older ISOs get syslinux, as before. Each system adds a small part that finds and opens USB
+into the first sectors of the drive. Older ISOs get syslinux, as before. An
+ISO with no BIOS boot loader gets a stick that starts on UEFI only. The
+installer does not check the ISO's name or layout. It refuses an ISO only
+when the stick could not boot: nothing on it to start from, or a file of
+4 GiB or more, which FAT32 cannot hold. Each system adds a small part that finds and opens USB
 drives:
 
 | file | system | how it reaches the drive |

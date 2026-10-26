@@ -87,6 +87,12 @@ fun human(v: Double): String {
     return ""
 }
 
+/** What the window calls the ISO: "Parted Magic 26.10", else its volume
+ *  label, else its file name. */
+fun isoName(info: JSONObject): String =
+    info.optString("Version").takeIf { it.isNotEmpty() }?.let { "Parted Magic $it" }
+        ?: info.optString("Label").ifEmpty { State.isoName }
+
 /** Everything the window shows. It lives outside the activity, so an
  *  install keeps going, and keeps its progress, if the window is rebuilt. */
 object State {
@@ -258,8 +264,12 @@ class MainActivity : ComponentActivity() {
                 } else {
                     State.iso = info
                     val build = info.optString("Build").takeIf { it.isNotEmpty() }?.let { ", build $it" } ?: ""
-                    var txt = "Parted Magic ${info.optString("Version")}$build, ${human(info.optDouble("Bytes"))}"
-                    if (!info.optBoolean("BIOSModulesMatch")) {
+                    var txt = "${isoName(info)}$build, ${human(info.optDouble("Bytes"))}"
+                    if (info.optString("BIOSLoader").isEmpty()) {
+                        // No BIOS boot loader on the ISO (the arm64 one): the core makes a
+                        // UEFI-only stick whatever the switch says, so the switch is greyed.
+                        txt += " (UEFI only)"
+                    } else if (!info.optBoolean("BIOSModulesMatch")) {
                         txt += " (BIOS modules newer than this installer: UEFI-only)"
                         State.bios = false
                     }
@@ -369,7 +379,7 @@ class MainActivity : ComponentActivity() {
         val build = i.optString("Build").takeIf { it.isNotEmpty() }?.let { " (build $it)" } ?: ""
         var text = "Everything on this drive will be erased.\n\n" +
             "${d.optString("Model")}, ${human(d.optDouble("Size"))}, USB, serial ${d.optString("Serial").ifEmpty { "unknown" }}\n\n" +
-            "Parted Magic ${i.optString("Version")}$build will be installed from:\n${State.isoName}\n\nThis cannot be undone."
+            "${isoName(i)}$build will be installed from:\n${State.isoName}\n\nThis cannot be undone."
         if (!d.optBoolean("Removable", true)) {
             text += "\n\nThis device reports itself as a hard drive. Parted Magic will take about 10 seconds longer to find it at boot."
         }
@@ -489,9 +499,9 @@ class MainActivity : ComponentActivity() {
                 State.fileLine = ""
                 State.resultKind = "done"
                 // The core names the target "usb:"; say which drive it was.
-                val version = State.iso?.optString("Version") ?: ""
+                val name = State.iso?.let { isoName(it) } ?: "Parted Magic"
                 val model = State.drive?.optString("Model") ?: "the USB drive"
-                State.resultText = "Parted Magic $version written to $model.\n$note Took ${secs / 60} min ${secs % 60} s.\n" +
+                State.resultText = "$name written to $model.\n$note Took ${secs / 60} min ${secs % 60} s.\n" +
                     "The drive has been ejected. You can unplug it."
             }
         }
@@ -594,7 +604,8 @@ class MainActivity : ComponentActivity() {
                         enabled = !State.running,
                     )
                     SwitchRow("Verify after writing (recommended)", State.verify) { State.verify = it }
-                    SwitchRow("Include legacy BIOS boot loader", State.bios) { State.bios = it }
+                    SwitchRow("Include legacy BIOS boot loader", State.bios,
+                        enabled = State.iso?.optString("BIOSLoader")?.isEmpty() != true) { State.bios = it }
                 }
 
                 if (!ready() && !State.running) {
@@ -669,10 +680,10 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun SwitchRow(text: String, value: Boolean, set: (Boolean) -> Unit) {
+    private fun SwitchRow(text: String, value: Boolean, enabled: Boolean = true, set: (Boolean) -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(text, Modifier.weight(1f))
-            Switch(checked = value, onCheckedChange = { set(it); saveSettings() }, enabled = !State.running)
+            Switch(checked = value, onCheckedChange = { set(it); saveSettings() }, enabled = enabled && !State.running)
         }
     }
 }

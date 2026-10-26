@@ -48,6 +48,14 @@ func num(_ x: Any?) -> Double {
     return 0
 }
 
+// What the window calls the ISO: "Parted Magic 26.10", else its volume label,
+// else its file name.
+func isoName(_ info: [String: Any]) -> String {
+    if let v = info["Version"] as? String, !v.isEmpty { return "Parted Magic \(v)" }
+    if let l = info["Label"] as? String, !l.isEmpty { return l }
+    return ((info["Source"] as? String ?? "") as NSString).lastPathComponent
+}
+
 // The window's content view takes an ISO dropped from Finder, so the ISO can
 // be chosen without the system file panel (it hung on the Air, 2026-10-21).
 final class DropView: NSView {
@@ -411,6 +419,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let edata = err.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
         let info = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        biosCB.isEnabled = true
         if p.terminationStatus != 0 || info == nil {
             var msg = "Not a Parted Magic ISO"
             for line in (String(decoding: data, as: UTF8.self) + "\n" + String(decoding: edata, as: UTF8.self)).split(separator: "\n")
@@ -424,9 +433,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } else {
             source = info
             isoStatus.textColor = .labelColor
-            let build = (info?["Build"] as? String).map { ", build \($0)" } ?? ""
-            var txt = "Parted Magic \(info?["Version"] as? String ?? "")\(build), \(human(num(info?["Bytes"])))"
-            if !(info?["BIOSModulesMatch"] as? Bool ?? false) {
+            let build = (info?["Build"] as? String).flatMap { $0.isEmpty ? nil : ", build \($0)" } ?? ""
+            var txt = "\(isoName(info ?? [:]))\(build), \(human(num(info?["Bytes"])))"
+            if (info?["BIOSLoader"] as? String ?? "").isEmpty {
+                // No BIOS boot loader on the ISO (the arm64 one): the core makes
+                // a UEFI-only stick whatever the box says, so the box is greyed.
+                txt += " (UEFI only)"
+                biosCB.isEnabled = false
+            } else if !(info?["BIOSModulesMatch"] as? Bool ?? false) {
                 txt += " (BIOS modules newer than this installer: UEFI-only)"
                 biosCB.state = .off
             }
@@ -461,9 +475,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc func installClicked() {
         guard let d = selectedDrive(), let info = source, let iso = isoPath, let core = core else { return }
-        let build = (info["Build"] as? String).map { " (build \($0))" } ?? ""
+        let build = (info["Build"] as? String).flatMap { $0.isEmpty ? nil : " (build \($0))" } ?? ""
         var text = "\(d.model), \(human(d.size)), \(d.usb ? "USB" : "not USB"), serial \(d.serial.isEmpty ? "unknown" : d.serial)\n"
-            + "Device \(d.path)\n\nParted Magic \(info["Version"] as? String ?? "")\(build) will be installed from:\n\(iso)\n\nThis cannot be undone."
+            + "Device \(d.path)\n\n\(isoName(info))\(build) will be installed from:\n\(iso)\n\nThis cannot be undone."
         if d.usb && !d.removable {
             text += "\n\nThis device reports itself as a hard drive. Parted Magic will take about 10 seconds longer to find it at boot."
         }

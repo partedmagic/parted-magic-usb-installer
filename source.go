@@ -91,6 +91,9 @@ type Source struct {
 	Loader   string
 	GrubBoot []byte
 	GrubCore []byte
+	// BootLabel is set when the ISO's boot menu finds its medium by the
+	// volume label: the stick must carry that label, whatever --label says.
+	BootLabel string
 }
 
 // Two release-naming schemes: the date form used until 2026-09
@@ -217,29 +220,47 @@ func labelVersion(version, build string) string {
 	return version + "_" + build
 }
 
-// validate applies the rules of design section 6. Every failure is fatal and named.
+// efiBootRE is the removable-media boot file UEFI firmware starts from a
+// stick: \EFI\BOOT\BOOTX64.EFI on a PC, BOOTAA64.EFI on arm64, and so on.
+var efiBootRE = regexp.MustCompile(`(?i)^efi/boot/boot[a-z0-9]+\.efi$`)
+
+// diskInfoRE reads a version out of /.disk/info ("Parted Magic 26.10 arm64 ...").
+var diskInfoRE = regexp.MustCompile(`Parted Magic ([0-9][0-9A-Za-z._-]*)`)
+
+// validate decides whether the source can make a stick that starts a
+// computer, and nothing else.  It refuses a file FAT32 cannot hold (4 GiB or
+// more), a Rock Ridge relocation it cannot copy, and an ISO with nothing to
+// boot: no EFI\BOOT\BOOT*.EFI and no BIOS boot loader.  The label, the
+// version, the squashfs name and where the kernel sits are read as found,
+// for messages and the manifest only.  Until 2026-10-26 every one of them
+// was a rule, so an ISO laid out any other way than an x86 release (a new
+// name, a moved file, the arm64 ISO) needed a new installer.  Patrick: "It's
+// so picky I'm surprised we don't have to make a new release for every new
+// iso name."
 func (s *Source) validate() error {
 	var probs []string
-	if s.Label != "" {
-		m := labelRE.FindStringSubmatch(s.Label)
-		if m == nil {
-			probs = append(probs, fmt.Sprintf("volume label %q is not PM_YYYY_MM_DD[_n] or PM_YY.MM[_n]", s.Label))
-		} else {
-			s.Version, s.Build = m[1], m[2]
-		}
-	}
-	if b, err := s.readAll(".disk/info"); err != nil || strings.TrimSpace(string(b)) != "[Parted Magic]" {
-		probs = append(probs, "/.disk/info missing or not \"[Parted Magic]\"")
+	// The version: from the label (PM_26.10_4), else from a PMAGIC_*.SQFS
+	// name, else from /.disk/info.
+	if m := labelRE.FindStringSubmatch(s.Label); m != nil {
+		s.Version, s.Build = m[1], m[2]
 	}
 	var sqfs []string
-	for _, e := range s.entries {
+	var biggest *entry // any other squashfs: casper/filesystem.squashfs on arm64
+	efi := false
+	for i := range s.entries {
+		e := &s.entries[i]
 		if m := sqfsRE.FindStringSubmatch(e.p); m != nil {
 			sqfs = append(sqfs, e.p)
 			if s.Version == "" {
 				s.Version, s.Build = m[1], m[2]
-			} else if m[1] != s.Version || m[2] != s.Build {
-				probs = append(probs, fmt.Sprintf("%s does not match label version %s", e.p, labelVersion(s.Version, s.Build)))
 			}
+		} else if lp := strings.ToLower(e.p); !e.dir && (strings.HasSuffix(lp, ".sqfs") || strings.HasSuffix(lp, ".squashfs")) {
+			if biggest == nil || e.size > biggest.size {
+				biggest = e
+			}
+		}
+		if !e.dir && efiBootRE.MatchString(e.p) {
+			efi = true
 		}
 		if !e.dir && e.size >= 1<<32 {
 			probs = append(probs, fmt.Sprintf("%s is %d bytes; FAT32 files must be under 4 GiB", e.p, e.size))
@@ -248,31 +269,32 @@ func (s *Source) validate() error {
 			probs = append(probs, "ISO contains a .rr_moved directory (deep-directory relocation); refusing rather than guessing")
 		}
 	}
-	if len(sqfs) != 1 {
-		probs = append(probs, fmt.Sprintf("expected exactly one pmagic/pmodules/PMAGIC_*.SQFS, found %d", len(sqfs)))
-	} else {
+	// The squashfs is copied last, in one long run.  Of several PMAGIC_*.SQFS
+	// the one of the label's version, else the first.
+	switch {
+	case len(sqfs) > 0:
 		s.SQFS = sqfs[0]
+		for _, p := range sqfs {
+			if m := sqfsRE.FindStringSubmatch(p); m[1] == s.Version && m[2] == s.Build {
+				s.SQFS = p
+				break
+			}
+		}
+	case biggest != nil:
+		s.SQFS = biggest.p
 	}
-	// An ISO with GRUB's BIOS files boots BIOS through GRUB, even while it
-	// still carries boot/syslinux for older installers.  Without them it is
-	// a syslinux ISO (26.10_3 and older), and the syslinux files are required.
-	if s.has(grubBootImg) || s.has(grubCoreImg) {
-		s.Loader = loaderGRUB
-	} else {
-		s.Loader = loaderSyslinux
-	}
-	reqs := []string{"pmagic/bzImage", "pmagic/initrd.img", "boot/grub/grub.cfg", "EFI/boot/bootx64.efi", "EFI/boot/grubx64.efi", "EFI/boot/mmx64.efi"}
-	if s.Loader == loaderGRUB {
-		reqs = append(reqs, "boot/grub/bios.cfg", grubBootImg, grubCoreImg, grubDir+"/normal.mod")
-	} else {
-		reqs = append(reqs, "boot/syslinux/syslinux.cfg", "boot/syslinux/ldlinux.c32", "boot/syslinux/mbr.bin")
-	}
-	for _, req := range reqs {
-		if !s.has(req) {
-			probs = append(probs, "missing "+req)
+	if s.Version == "" {
+		if b, err := s.readAll(".disk/info"); err == nil {
+			if m := diskInfoRE.FindStringSubmatch(string(b)); m != nil {
+				s.Version = m[1]
+			}
 		}
 	}
-	if s.Loader == loaderGRUB && s.has(grubBootImg) && s.has(grubCoreImg) {
+	// The BIOS boot loader: GRUB when the ISO ships its BIOS files (26.10_4
+	// on), else syslinux when it ships those (26.10_3 and older), else none
+	// and the stick starts on UEFI only, as an arm64 one does.
+	switch {
+	case s.has(grubBootImg) && s.has(grubCoreImg) && s.has(grubDir+"/normal.mod") && s.has("boot/grub/bios.cfg"):
 		boot, err1 := s.readAll(grubBootImg)
 		core, err2 := s.readAll(grubCoreImg)
 		if err1 != nil || err2 != nil {
@@ -280,20 +302,20 @@ func (s *Source) validate() error {
 		} else if err := checkGRUB(boot, core); err != nil {
 			probs = append(probs, err.Error())
 		} else {
-			s.GrubBoot, s.GrubCore = boot, core
+			s.Loader, s.GrubBoot, s.GrubCore = loaderGRUB, boot, core
 		}
-	}
-	if e, ok := s.byPath["boot/grub/x86_64-efi"]; !ok || !e.dir {
-		probs = append(probs, "missing boot/grub/x86_64-efi/")
-	}
-	if e, ok := s.byPath["boot/syslinux/mbr.bin"]; ok && e.size != 440 {
-		probs = append(probs, "boot/syslinux/mbr.bin is not 440 bytes")
+	case s.has("boot/syslinux/syslinux.cfg") && s.has("boot/syslinux/ldlinux.c32") && s.has("boot/syslinux/mbr.bin"):
+		if e := s.byPath["boot/syslinux/mbr.bin"]; e.size != 440 {
+			probs = append(probs, "boot/syslinux/mbr.bin is not 440 bytes")
+		} else {
+			s.Loader = loaderSyslinux
+		}
 	}
 	if sys, err := s.readAll("boot/syslinux/ldlinux.sys"); err == nil {
 		bss, err2 := s.readAll("boot/syslinux/ldlinux.bss")
 		if err2 == nil && len(bss) == 512 && len(sys) >= 4096 && len(sys)%512 == 0 && hasLdlinuxMagic(sys) {
 			s.PayloadSys, s.PayloadBss, s.PayloadFrom = sys, bss, "source"
-		} else {
+		} else if s.Loader == loaderSyslinux {
 			probs = append(probs, "boot/syslinux/ldlinux.sys is present but it and ldlinux.bss are not a usable syslinux payload")
 		}
 	}
@@ -306,9 +328,29 @@ func (s *Source) validate() error {
 		// A payload shipped beside the modules matches them by construction.
 		s.ModuleMatch = s.PayloadFrom == "source" || s.moduleHash == strings.TrimSpace(expectedLdlinuxC32)
 	}
-	if s.Loader == loaderGRUB {
-		// boot.img and core.img come from the ISO beside its modules.
+	if s.Loader != loaderSyslinux {
+		// GRUB's boot.img and core.img come from the ISO beside its modules,
+		// and a UEFI-only stick has no BIOS modules to match.
 		s.ModuleMatch = true
+	}
+	if !efi && s.Loader == loaderNone {
+		probs = append(probs, "nothing on it starts a computer: no EFI/BOOT/BOOT*.EFI and no BIOS boot loader")
+	}
+	// An ISO whose boot menu finds its medium by the volume label (the arm64
+	// one: live-media=/dev/disk/by-label/PM_ARM64) needs that label on the
+	// stick too.
+	if s.Label != "" {
+		if b, err := s.readAll("boot/grub/grub.cfg"); err == nil {
+			cfg := string(b)
+			for _, ref := range []string{"by-label/" + s.Label, "--label " + s.Label, "label=" + s.Label} {
+				if strings.Contains(cfg, ref) {
+					if l, err := normLabel(s.Label); err == nil {
+						s.BootLabel = l
+					}
+					break
+				}
+			}
+		}
 	}
 	if len(probs) > 0 {
 		return errors.New("not a usable Parted Magic source: " + strings.Join(probs, "; "))
@@ -323,11 +365,15 @@ type summary struct {
 	BIOSModulesMatch                    bool
 	Payload, PayloadFrom                string
 	BIOSLoader                          string
+	StickLabel                          string `json:",omitempty"`
 }
 
 func (s *Source) payloadDesc() string {
 	if s.Loader == loaderGRUB {
 		return "GRUB boot.img and core.img shipped in the source (boot/grub/i386-pc)"
+	}
+	if s.Loader == loaderNone {
+		return "none (the source has no BIOS boot loader; UEFI only)"
 	}
 	if s.PayloadFrom == "source" {
 		return "ldlinux.sys and ldlinux.bss shipped in the source (boot/syslinux)"
@@ -335,10 +381,23 @@ func (s *Source) payloadDesc() string {
 	return payloadName
 }
 
+// name is what messages call the source: "Parted Magic 26.10", else its
+// volume label, else its file name.
+func (s *Source) name() string {
+	switch {
+	case s.Version != "":
+		return "Parted Magic " + s.Version
+	case s.Label != "":
+		return s.Label
+	}
+	return filepath.Base(s.path)
+}
+
 func (s *Source) summary() summary {
 	return summary{Source: s.path, Label: s.Label, Version: s.Version, Build: s.Build, SQFS: s.SQFS,
 		Files: s.Files, Dirs: s.Dirs, Bytes: s.Bytes, RequiredBytes: requiredBytes(s.entries, 32*1024),
-		BIOSModulesMatch: s.ModuleMatch, Payload: s.payloadDesc(), PayloadFrom: s.PayloadFrom, BIOSLoader: s.Loader}
+		BIOSModulesMatch: s.ModuleMatch, Payload: s.payloadDesc(), PayloadFrom: s.PayloadFrom, BIOSLoader: s.Loader,
+		StickLabel: s.BootLabel}
 }
 
 // skipped: ISO-only artifacts that must not land on a stick (design section 2).

@@ -82,15 +82,23 @@ func cmdUpgrade(args []string) {
 	if err != nil {
 		fail(3, "prepare", err.Error())
 	}
-	if b, err := readFATFile(f, ".disk/info"); err != nil || strings.TrimSpace(string(b)) != "[Parted Magic]" {
-		fail(3, "prepare", "the drive does not hold a Parted Magic installation")
-	}
+	// The installer's manifest marks a stick it made; /.disk/info is the
+	// ISO's own and says different things on different ISOs.
 	old, err := readFATFile(f, manifestPath)
 	if err != nil {
 		fail(3, "prepare", "no installer manifest on the drive; use install for a fresh copy")
 	}
 	oldFiles, oldVersion, oldBIOS := parseManifest(old)
-	bios := oldBIOS
+	bios := oldBIOS && s.Loader != loaderNone
+	if s.BootLabel != "" {
+		vbr := make([]byte, 512)
+		if _, err := ro.ReadAt(vbr, pb); err != nil {
+			fail(4, "prepare", err.Error())
+		}
+		if have := strings.TrimRight(string(vbr[71:82]), " "); have != s.BootLabel {
+			fail(3, "prepare", fmt.Sprintf("this ISO finds its stick by the volume label %s and the drive's is %s; use install for a fresh copy", s.BootLabel, have))
+		}
+	}
 	if bios && !s.ModuleMatch && !*allowMismatch {
 		fail(3, "source", "this ISO's BIOS boot modules are from a different syslinux build than this installer's payload; update the installer")
 	}
@@ -155,7 +163,9 @@ func cmdUpgrade(args []string) {
 	if sessionD != nil && oldVersion != s.Version && *deleteSession {
 		os.Remove(filepath.Join(mnt, "pmagic/pmodules/099-saved-session.sqfm"))
 	}
-	os.Remove(filepath.Join(mnt, filepath.FromSlash(s.SQFS)))
+	if s.SQFS != "" {
+		os.Remove(filepath.Join(mnt, filepath.FromSlash(s.SQFS)))
+	}
 	os.Remove(filepath.Join(mnt, filepath.FromSlash(ldlinuxPath)))
 	hashes := map[string]string{}
 	var copyTotal int64
@@ -224,8 +234,10 @@ func cmdUpgrade(args []string) {
 			fail(4, "copy", err.Error())
 		}
 	}
-	if err := copyOne(*s.byPath[s.SQFS]); err != nil {
-		fail(4, "copy", err.Error())
+	if s.SQFS != "" {
+		if err := copyOne(*s.byPath[s.SQFS]); err != nil {
+			fail(4, "copy", err.Error())
+		}
 	}
 	var mb strings.Builder
 	mb.WriteString(manifestHeader(s, bi))
@@ -294,7 +306,11 @@ func cmdUpgrade(args []string) {
 			fail(5, "verify", err.Error())
 		}
 	}
-	emit("done", map[string]any{"phase": "finish", "message": fmt.Sprintf("Parted Magic %s upgraded to %s on %s", oldVersion, s.Version, *tgt), "verified": !*noVerify, "bios": bios, "loader": bi.Loader})
+	to := s.Version
+	if to == "" {
+		to = s.name()
+	}
+	emit("done", map[string]any{"phase": "finish", "message": fmt.Sprintf("Parted Magic %s upgraded to %s on %s", oldVersion, to, *tgt), "verified": !*noVerify, "bios": bios, "loader": bi.Loader})
 }
 
 func readFATFile(f *fatFS, p string) ([]byte, error) {

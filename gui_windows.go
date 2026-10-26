@@ -71,6 +71,18 @@ func humanBytes(n int64) string {
 	return ""
 }
 
+// isoName is what the window calls the ISO: "Parted Magic 26.10", else its
+// volume label, else its file name.
+func isoName(s *summary) string {
+	switch {
+	case s.Version != "":
+		return "Parted Magic " + s.Version
+	case s.Label != "":
+		return s.Label
+	}
+	return filepath.Base(s.Source)
+}
+
 func runGUI() {
 	g := &gui{}
 	g.exe, _ = os.Executable()
@@ -223,14 +235,20 @@ func (g *gui) browse() {
 	g.info = nil
 	events, raw, rc := g.runJSON("inspect", "--source", dlg.FilePath)
 	var s summary
-	if rc == 0 && json.Unmarshal([]byte(strings.TrimSpace(raw)), &s) == nil && s.SQFS != "" {
+	g.biosCB.SetEnabled(true)
+	if rc == 0 && json.Unmarshal([]byte(strings.TrimSpace(raw)), &s) == nil {
 		g.info = &s
 		build := ""
 		if s.Build != "" {
 			build = ", build " + s.Build
 		}
-		txt := fmt.Sprintf("Parted Magic %s%s, %s", s.Version, build, humanBytes(s.Bytes))
-		if !s.BIOSModulesMatch {
+		txt := fmt.Sprintf("%s%s, %s", isoName(&s), build, humanBytes(s.Bytes))
+		if s.BIOSLoader == "" {
+			// No BIOS boot loader on the ISO (the arm64 one): the core makes
+			// a UEFI-only stick whatever the box says, so the box is greyed.
+			txt += " (UEFI only)"
+			g.biosCB.SetEnabled(false)
+		} else if !s.BIOSModulesMatch {
 			txt += " (BIOS modules newer than this installer: UEFI-only)"
 			g.biosCB.SetChecked(false)
 		}
@@ -278,8 +296,8 @@ func (g *gui) install() {
 	if g.info.Build != "" {
 		build = fmt.Sprintf(" (build %s)", g.info.Build)
 	}
-	text := fmt.Sprintf("Everything on this drive will be erased.\r\n\r\n%s, %s, %s, serial %s\r\nDisk %d %s\r\n\r\nParted Magic %s%s will be installed from:\r\n%s\r\n\r\nThis cannot be undone.",
-		d.Model, humanBytes(d.Size), kind, d.Serial, d.Number, d.Letters, g.info.Version, build, g.isoEdit.Text())
+	text := fmt.Sprintf("Everything on this drive will be erased.\r\n\r\n%s, %s, %s, serial %s\r\nDisk %d %s\r\n\r\n%s%s will be installed from:\r\n%s\r\n\r\nThis cannot be undone.",
+		d.Model, humanBytes(d.Size), kind, d.Serial, d.Number, d.Letters, isoName(g.info), build, g.isoEdit.Text())
 	if d.USB && !d.Removable {
 		text += "\r\n\r\nThis device reports itself as a hard drive. Parted Magic will take about 10 seconds longer to find it at boot."
 	}

@@ -43,6 +43,13 @@ def human(n):
             return f"{int(n)} bytes" if unit == "bytes" else f"{n:.1f} {unit}"
         n /= 1000.0
 
+def iso_name(info):
+    """What the window calls the ISO: "Parted Magic 26.10", else its volume
+    label, else its file name."""
+    if info.get("Version"):
+        return f"Parted Magic {info['Version']}"
+    return info.get("Label") or os.path.basename(info.get("Source", ""))
+
 def settings_path():
     d = os.path.join(GLib.get_user_config_dir(), "pmusb")
     os.makedirs(d, exist_ok=True)
@@ -206,6 +213,7 @@ class App(Gtk.Window):
             info = json.loads(p.stdout)
         except ValueError:
             info = None
+        self.bios.set_sensitive(True)
         if p.returncode != 0 or not info:
             msg = "Not a Parted Magic ISO"
             for line in p.stdout.splitlines() + p.stderr.splitlines():
@@ -218,8 +226,13 @@ class App(Gtk.Window):
         else:
             self.source_ok = info
             build = f", build {info['Build']}" if info.get("Build") else ""
-            txt = f"Parted Magic {info['Version']}{build}, {human(info['Bytes'])}"
-            if not info.get("BIOSModulesMatch"):
+            txt = f"{iso_name(info)}{build}, {human(info['Bytes'])}"
+            if not info.get("BIOSLoader"):
+                # No BIOS boot loader on the ISO (the arm64 one): the core makes
+                # a UEFI-only stick whatever the box says, so the box is greyed.
+                txt += " (UEFI only)"
+                self.bios.set_sensitive(False)
+            elif not info.get("BIOSModulesMatch"):
                 txt += " (BIOS modules newer than this installer: UEFI-only)"
                 self.bios.set_active(False)
             self.iso_status.set_text(txt)
@@ -245,8 +258,8 @@ class App(Gtk.Window):
             return
         text = ("Everything on this drive will be erased.\n\n"
                 f"{d['Model']}, {human(d['Size'])}, {'USB' if d.get('USB') else 'not USB'}, serial {d.get('Serial') or 'unknown'}\n"
-                f"Device {d['Path']}\n\n"
-                f"Parted Magic {info['Version']}" + (f" (build {info['Build']})" if info.get('Build') else "") +
+                f"Device {d['Path']}\n\n" +
+                iso_name(info) + (f" (build {info['Build']})" if info.get('Build') else "") +
                 f" will be installed from:\n{self.iso.get_filename()}\n\nThis cannot be undone.")
         if d.get("USB") and not d.get("Removable"):
             text += "\n\nThis device reports itself as a hard drive. Parted Magic will take about 10 seconds longer to find it at boot."

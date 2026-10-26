@@ -136,6 +136,14 @@ func cmdInstall(args []string) {
 	if err := s.validate(); err != nil {
 		fail(3, "source", err.Error())
 	}
+	if s.BootLabel != "" && s.BootLabel != label {
+		emit("log", map[string]any{"phase": "source", "message": fmt.Sprintf("volume label %s, not %s: this ISO's boot menu finds its stick by that name", s.BootLabel, label)})
+		label = s.BootLabel
+	}
+	if bios && s.Loader == loaderNone {
+		emit("log", map[string]any{"phase": "source", "message": "this ISO has no BIOS boot loader: the stick starts on UEFI only"})
+		bios = false
+	}
 	if bios && !s.ModuleMatch && !*allowMismatch {
 		fail(3, "source", "this ISO's BIOS boot modules (boot/syslinux/ldlinux.c32) are from a different syslinux build than this installer's payload; update the installer, or pass --no-bios for a UEFI-only stick")
 	}
@@ -322,7 +330,7 @@ func cmdInstall(args []string) {
 			emit("log", map[string]any{"phase": "finish", "message": "partition re-read failed: " + err.Error() + " (unplug and reconnect the drive)"})
 		}
 	}
-	emit("done", map[string]any{"phase": "finish", "message": fmt.Sprintf("Parted Magic %s written to %s", s.Version, *tgt), "verified": !*noVerify, "bios": bios, "loader": bi.Loader})
+	emit("done", map[string]any{"phase": "finish", "message": fmt.Sprintf("%s written to %s", s.name(), *tgt), "verified": !*noVerify, "bios": bios, "loader": bi.Loader})
 }
 
 // populate writes the tree through go-diskfs opened at the partition offset:
@@ -389,8 +397,10 @@ func populate(t Target, g geom, s *Source, bi bootInfo, opDone *int64, opTotal i
 			return nil, err
 		}
 	}
-	if err := copyOne(*s.byPath[s.SQFS]); err != nil {
-		return nil, err
+	if s.SQFS != "" {
+		if err := copyOne(*s.byPath[s.SQFS]); err != nil {
+			return nil, err
+		}
 	}
 	// manifest
 	var mb strings.Builder
