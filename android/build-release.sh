@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the signed release of Parted Magic USB Installer for Android on this
+# Builds the signed release of Erase Station USB Installer for Android on this
 # host: the app bundle (.aab) for Google Play and the APK for GitHub
 # Releases, both signed with the Parted Magic release key.
 #
@@ -32,8 +32,8 @@ unset pw
 
 version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
 mkdir -p "$out"
-cp app/build/outputs/apk/release/app-release.apk "$out/parted-magic-usb-installer-$version.apk"
-cp app/build/outputs/bundle/release/app-release.aab "$out/parted-magic-usb-installer-$version.aab"
+cp app/build/outputs/apk/release/app-release.apk "$out/erase-station-usb-installer-$version.apk"
+cp app/build/outputs/bundle/release/app-release.aab "$out/erase-station-usb-installer-$version.aab"
 cd "$out"
-sha256sum "parted-magic-usb-installer-$version.apk" "parted-magic-usb-installer-$version.aab"
+sha256sum "erase-station-usb-installer-$version.apk" "erase-station-usb-installer-$version.aab"
 echo "done: the signed files are in $out"

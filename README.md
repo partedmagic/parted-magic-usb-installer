@@ -1,20 +1,20 @@
-# Parted Magic USB Installer
+# Erase Station USB Installer
 
-Writes [Parted Magic](https://partedmagic.com/) to a USB flash drive.
+Writes [Erase Station](https://erasestation.com/) to a USB flash drive.
 
 The stick it makes is one FAT32 partition that boots on legacy BIOS and on
 UEFI with Secure Boot on. Every file is read back and checked before the
 installer reports success. The partition table is written last, so a stick
 that fails partway has no partition table and is never left half bootable.
-The stick stays writable, so Parted Magic's Save Session works on it.
+The stick stays writable, so Erase Station's Save Session works on it.
 
 It runs on:
 
 - Windows 10 and 11: `pmusb-gui.exe`, in the `install` folder of the
-  Parted Magic ISO
+  Erase Station ISO
 - Linux: packages in the same folder (`.deb`, `.rpm`, Slackware `.txz`)
 - macOS 26.5 and later on Apple silicon: an app in a `.dmg`, in the same
-  folder and on the Releases page, signed with Parted Magic's Developer ID and notarized by
+  folder and on the Releases page, signed with the Developer ID of Parted Magic LLC and notarized by
   Apple
 - Android phones and tablets with USB host support: the app on Google
   Play
@@ -23,7 +23,7 @@ It runs on:
 
 One program in Go does the work on every system. It reads the ISO, lays out
 the drive, writes the FAT32 filesystem, installs the BIOS boot loader and
-checks the result. Parted Magic 26.10_4 and later boot BIOS computers with
+checks the result. ISOs from 26.10_4 on boot BIOS computers with
 GRUB: the installer copies GRUB's boot.img and core.img from the ISO itself
 into the first sectors of the drive. Older ISOs get syslinux, as before. An
 ISO with no BIOS boot loader gets a stick that starts on UEFI only. The
@@ -78,7 +78,7 @@ Exit codes: 0 ok, 2 usage, 3 refused by a safety check, 4 device error,
 
 The installer is GPL-2.0-or-later (`COPYING`). It includes syslinux's
 installer code and boot loader, also GPL-2.0-or-later. It contains no GRUB
-code: GRUB's boot images are read from the Parted Magic ISO. The Android app also
+code: GRUB's boot images are read from the Erase Station ISO. The Android app also
 uses AndroidX and Jetpack Compose, which are Apache-2.0, so the Android app
 as a whole is distributed under GPL-3.0-or-later (`android/LICENSE`). The
 third-party Go libraries are listed in `THIRD-PARTY-NOTICES.txt`.

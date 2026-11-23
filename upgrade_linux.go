@@ -42,7 +42,7 @@ import (
 func cmdUpgrade(args []string) {
 	fs := flag.NewFlagSet("upgrade", flag.ExitOnError)
 	src := fs.String("source", "", "ISO file or extracted tree")
-	tgt := fs.String("target", "", "block device or image file holding a Parted Magic stick")
+	tgt := fs.String("target", "", "block device or image file holding an Erase Station stick")
 	confirm := fs.Bool("confirm-upgrade", false, "required")
 	deleteSession := fs.Bool("delete-session", false, "remove a saved session made on another version")
 	noVerify := fs.Bool("no-verify", false, "skip the read-back verification")
@@ -75,7 +75,7 @@ func cmdUpgrade(args []string) {
 		fail(4, "prepare", err.Error())
 	}
 	if sec0[510] != 0x55 || sec0[511] != 0xAA || (sec0[450] != 0x0C && sec0[450] != 0x0B) || sec0[462] != 0 {
-		fail(3, "prepare", "not a Parted Magic stick made by this installer (expected one FAT32 partition)")
+		fail(3, "prepare", "not an Erase Station stick made by this installer (expected one FAT32 partition)")
 	}
 	pb := int64(binary.LittleEndian.Uint32(sec0[454:])) * 512
 	f, err := openFAT(ro, pb)
@@ -310,7 +310,7 @@ func cmdUpgrade(args []string) {
 	if to == "" {
 		to = s.name()
 	}
-	emit("done", map[string]any{"phase": "finish", "message": fmt.Sprintf("Parted Magic %s upgraded to %s on %s", oldVersion, to, *tgt), "verified": !*noVerify, "bios": bios, "loader": bi.Loader})
+	emit("done", map[string]any{"phase": "finish", "message": fmt.Sprintf("Erase Station %s upgraded to %s on %s", oldVersion, to, *tgt), "verified": !*noVerify, "bios": bios, "loader": bi.Loader})
 }
 
 func readFATFile(f *fatFS, p string) ([]byte, error) {

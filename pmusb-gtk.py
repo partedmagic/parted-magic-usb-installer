@@ -23,7 +23,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
 
-APP_TITLE = "Parted Magic USB Installer"
+APP_TITLE = "Erase Station USB Installer"
 HERE = os.path.dirname(os.path.abspath(__file__))
 PHASES = {"source": "Reading the ISO", "prepare": "Preparing the drive", "format": "Formatting",
           "copy": "Writing files", "bootloader": "Installing boot loader", "flush": "Flushing to the drive",
@@ -47,7 +47,7 @@ def iso_name(info):
     """What the window calls the ISO: "Parted Magic 26.10", else its volume
     label, else its file name."""
     if info.get("Version"):
-        return f"Parted Magic {info['Version']}"
+        return f"Erase Station {info['Version']}"
     return info.get("Label") or os.path.basename(info.get("Source", ""))
 
 def settings_path():
@@ -78,8 +78,8 @@ class App(Gtk.Window):
         grid = Gtk.Grid(column_spacing=8, row_spacing=6)
         self.add(grid)
         row = 0
-        grid.attach(Gtk.Label(label="Parted Magic ISO", xalign=0), 0, row, 1, 1)
-        self.iso = Gtk.FileChooserButton(title="Choose the Parted Magic ISO")
+        grid.attach(Gtk.Label(label="Erase Station ISO", xalign=0), 0, row, 1, 1)
+        self.iso = Gtk.FileChooserButton(title="Choose the Erase Station ISO")
         self.iso.set_hexpand(True)
         f = Gtk.FileFilter(); f.set_name("ISO images"); f.add_pattern("*.iso"); f.add_pattern("*.ISO")
         self.iso.add_filter(f)
@@ -215,7 +215,7 @@ class App(Gtk.Window):
             info = None
         self.bios.set_sensitive(True)
         if p.returncode != 0 or not info:
-            msg = "Not a Parted Magic ISO"
+            msg = "Not an Erase Station ISO"
             for line in p.stdout.splitlines() + p.stderr.splitlines():
                 if line.startswith("{"):
                     try:
@@ -262,7 +262,7 @@ class App(Gtk.Window):
                 iso_name(info) + (f" (build {info['Build']})" if info.get('Build') else "") +
                 f" will be installed from:\n{self.iso.get_filename()}\n\nThis cannot be undone.")
         if d.get("USB") and not d.get("Removable"):
-            text += "\n\nThis device reports itself as a hard drive. Parted Magic will take about 10 seconds longer to find it at boot."
+            text += "\n\nThis device reports itself as a hard drive. Erase Station will take about 10 seconds longer to find it at boot."
         dlg = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.WARNING,
                                 buttons=Gtk.ButtonsType.NONE, text=text)
         dlg.add_button("Cancel", Gtk.ResponseType.CANCEL)
@@ -349,7 +349,7 @@ class App(Gtk.Window):
         self.refresh()
         kind, text = self.result or ("error", f"The installer stopped with exit code {rc}. See Details.")
         if kind == "done":
-            self.dialog(Gtk.MessageType.INFO, "Parted Magic is on the drive", text)
+            self.dialog(Gtk.MessageType.INFO, "Erase Station is on the drive", text)
         elif kind == "canceled":
             self.dialog(Gtk.MessageType.WARNING, "Canceled", "The drive has no partition table. Run the installer again to use it.")
         else:

@@ -20,7 +20,7 @@
 set -euo pipefail
 identity="Developer ID Application: Parted Magic LLC (PMTLT7M8U6)"
 profile=partedmagic-notary
-name="Parted Magic USB Installer"
+name="Erase Station USB Installer"
 here=$(cd "$(dirname "$0")" && pwd)
 [ $# -eq 2 ] && [ -x "$1" ] || { echo "usage: $0 PMUSB_CORE OUTDIR" >&2; exit 2; }
 core=$1; out=$2
@@ -29,8 +29,8 @@ mkdir -p "$out"
 out=$(cd "$out" && pwd)
 exec > >(tee "$out/release.log") 2>&1
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$here/Info.plist")
-dmg="$out/parted-magic-usb-installer-$version.dmg"
-echo "Parted Magic USB Installer $version for macOS, $(date)"
+dmg="$out/erase-station-usb-installer-$version.dmg"
+echo "Erase Station USB Installer $version for macOS, $(date)"
 
 # Everything it needs, before anything is signed.
 "$core" version | grep "^pmusb $version," ||

@@ -225,7 +225,7 @@ func labelVersion(version, build string) string {
 var efiBootRE = regexp.MustCompile(`(?i)^efi/boot/boot[a-z0-9]+\.efi$`)
 
 // diskInfoRE reads a version out of /.disk/info ("Parted Magic 26.10 arm64 ...").
-var diskInfoRE = regexp.MustCompile(`Parted Magic ([0-9][0-9A-Za-z._-]*)`)
+var diskInfoRE = regexp.MustCompile(`(?:Parted Magic|Erase Station) ([0-9][0-9A-Za-z._-]*)`)
 
 // validate decides whether the source can make a stick that starts a
 // computer, and nothing else.  It refuses a file FAT32 cannot hold (4 GiB or
@@ -353,7 +353,7 @@ func (s *Source) validate() error {
 		}
 	}
 	if len(probs) > 0 {
-		return errors.New("not a usable Parted Magic source: " + strings.Join(probs, "; "))
+		return errors.New("not a usable Erase Station source: " + strings.Join(probs, "; "))
 	}
 	return nil
 }
@@ -386,7 +386,7 @@ func (s *Source) payloadDesc() string {
 func (s *Source) name() string {
 	switch {
 	case s.Version != "":
-		return "Parted Magic " + s.Version
+		return "Erase Station " + s.Version
 	case s.Label != "":
 		return s.Label
 	}

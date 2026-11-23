@@ -33,7 +33,7 @@ class InstallService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ensureChannel(this)
-        val n = note(this, "Writing Parted Magic to the USB drive", "Starting...", 0, true)
+        val n = note(this, "Writing Erase Station to the USB drive", "Starting...", 0, true)
         try {
             if (Build.VERSION.SDK_INT >= 29) {
                 startForeground(NOTE_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
@@ -108,7 +108,7 @@ class InstallService : Service() {
             if (instance == null || percent == lastPercent) return
             lastPercent = percent
             c.getSystemService(NotificationManager::class.java)
-                .notify(NOTE_ID, note(c, "Writing Parted Magic to the USB drive", text, percent, true))
+                .notify(NOTE_ID, note(c, "Writing Erase Station to the USB drive", text, percent, true))
         }
 
         fun stop(c: Context, title: String, text: String) {

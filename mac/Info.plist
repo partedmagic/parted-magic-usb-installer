@@ -13,15 +13,15 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Parted Magic USB Installer</string>
+	<string>Erase Station USB Installer</string>
 	<key>CFBundleDisplayName</key>
-	<string>Parted Magic USB Installer</string>
+	<string>Erase Station USB Installer</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.4</string>
+	<string>0.5</string>
 	<key>CFBundleVersion</key>
-	<string>4</string>
+	<string>5</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.5</string>
 	<key>NSHighResolutionCapable</key>

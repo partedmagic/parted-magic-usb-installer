@@ -76,7 +76,7 @@ func humanBytes(n int64) string {
 func isoName(s *summary) string {
 	switch {
 	case s.Version != "":
-		return "Parted Magic " + s.Version
+		return "Erase Station " + s.Version
 	case s.Label != "":
 		return s.Label
 	}
@@ -87,12 +87,12 @@ func runGUI() {
 	g := &gui{}
 	g.exe, _ = os.Executable()
 	err := MainWindow{
-		AssignTo: &g.mw, Title: "Parted Magic USB Installer",
+		AssignTo: &g.mw, Title: "Erase Station USB Installer",
 		MinSize: Size{Width: 560, Height: 440}, Size: Size{Width: 620, Height: 480},
 		Layout: VBox{},
 		Children: []Widget{
 			Composite{Layout: Grid{Columns: 3}, Children: []Widget{
-				Label{Text: "Parted Magic ISO"},
+				Label{Text: "Erase Station ISO"},
 				LineEdit{AssignTo: &g.isoEdit, ReadOnly: true},
 				PushButton{Text: "Browse...", OnClicked: g.browse},
 				Label{Text: ""},
@@ -119,7 +119,7 @@ func runGUI() {
 		},
 	}.Create()
 	if err != nil {
-		walk.MsgBox(nil, "Parted Magic USB Installer", err.Error(), walk.MsgBoxIconError)
+		walk.MsgBox(nil, "Erase Station USB Installer", err.Error(), walk.MsgBoxIconError)
 		return
 	}
 	if ic, err := walk.NewIconFromResource("APP"); err == nil {
@@ -221,7 +221,7 @@ func (g *gui) refresh() {
 
 func (g *gui) browse() {
 	dlg := new(walk.FileDialog)
-	dlg.Title = "Choose the Parted Magic ISO"
+	dlg.Title = "Choose the Erase Station ISO"
 	dlg.Filter = "ISO images (*.iso)|*.iso|All files (*.*)|*.*"
 	if d, ok := g.settings["last_iso_dir"].(string); ok {
 		dlg.InitialDirPath = d
@@ -254,7 +254,7 @@ func (g *gui) browse() {
 		}
 		g.isoStatus.SetText(txt)
 	} else {
-		msg := "Not a Parted Magic ISO"
+		msg := "Not an Erase Station ISO"
 		for _, e := range events {
 			if m, ok := e["message"].(string); ok {
 				msg = m
@@ -299,7 +299,7 @@ func (g *gui) install() {
 	text := fmt.Sprintf("Everything on this drive will be erased.\r\n\r\n%s, %s, %s, serial %s\r\nDisk %d %s\r\n\r\n%s%s will be installed from:\r\n%s\r\n\r\nThis cannot be undone.",
 		d.Model, humanBytes(d.Size), kind, d.Serial, d.Number, d.Letters, isoName(g.info), build, g.isoEdit.Text())
 	if d.USB && !d.Removable {
-		text += "\r\n\r\nThis device reports itself as a hard drive. Parted Magic will take about 10 seconds longer to find it at boot."
+		text += "\r\n\r\nThis device reports itself as a hard drive. Erase Station will take about 10 seconds longer to find it at boot."
 	}
 	if walk.MsgBox(g.mw, "Erase and install?", text, walk.MsgBoxIconWarning|walk.MsgBoxOKCancel|walk.MsgBoxDefButton2) != walk.DlgCmdOK {
 		return
@@ -437,7 +437,7 @@ func (g *gui) onExit(rc int) {
 	g.refresh()
 	switch {
 	case strings.HasPrefix(g.result, "done: "):
-		walk.MsgBox(g.mw, "Parted Magic is on the drive", strings.TrimPrefix(g.result, "done: "), walk.MsgBoxIconInformation)
+		walk.MsgBox(g.mw, "Erase Station is on the drive", strings.TrimPrefix(g.result, "done: "), walk.MsgBoxIconInformation)
 	case g.result == "canceled":
 		walk.MsgBox(g.mw, "Canceled", "The drive has no partition table. Run the installer again to use it.", walk.MsgBoxIconWarning)
 	default:

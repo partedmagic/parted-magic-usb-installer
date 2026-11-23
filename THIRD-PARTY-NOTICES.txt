@@ -1,4 +1,4 @@
-Third-party components of the Parted Magic USB installer (pmusb) and their licenses
+Third-party components of the Erase Station USB installer (pmusb) and their licenses
 ===============================================================================
 
 pmusb itself: Copyright 2026 Patrick J. Verner, GPL-2.0-or-later (see COPYING).

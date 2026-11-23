@@ -315,7 +315,7 @@ func openDevice(path, expect string, allowNonUSB, allowFixed bool, sourcePath st
 	}
 	if d == nil {
 		if prot := protectedDisks(sourcePath); prot[filepath.Base(real)] {
-			return nil, nil, errors.New("refused: " + real + " holds this system, the running Parted Magic, or the source ISO")
+			return nil, nil, errors.New("refused: " + real + " holds this system, the running Erase Station, or the source ISO")
 		}
 		return nil, nil, errors.New("refused: " + real + " is not an eligible USB drive (use --allow-non-usb or --allow-fixed if you mean it)")
 	}

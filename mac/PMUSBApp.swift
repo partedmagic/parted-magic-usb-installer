@@ -24,7 +24,7 @@
 import AppKit
 import UniformTypeIdentifiers
 
-let appTitle = "Parted Magic USB Installer"
+let appTitle = "Erase Station USB Installer"
 let phases = ["source": "Reading the ISO", "prepare": "Preparing the drive", "format": "Formatting",
               "copy": "Writing files", "bootloader": "Installing boot loader", "flush": "Flushing to the drive",
               "verify": "Verifying", "finish": "Finishing"]
@@ -51,7 +51,7 @@ func num(_ x: Any?) -> Double {
 // What the window calls the ISO: "Parted Magic 26.10", else its volume label,
 // else its file name.
 func isoName(_ info: [String: Any]) -> String {
-    if let v = info["Version"] as? String, !v.isEmpty { return "Parted Magic \(v)" }
+    if let v = info["Version"] as? String, !v.isEmpty { return "Erase Station \(v)" }
     if let l = info["Label"] as? String, !l.isEmpty { return l }
     return ((info["Source"] as? String ?? "") as NSString).lastPathComponent
 }
@@ -191,7 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.delegate = self
         window.center()
 
-        let isoLabel = NSTextField(labelWithString: "Parted Magic ISO")
+        let isoLabel = NSTextField(labelWithString: "Erase Station ISO")
         let driveLabel = NSTextField(labelWithString: "USB drive")
         for l in [isoLabel, driveLabel] { l.widthAnchor.constraint(equalToConstant: 120).isActive = true }
         isoField.placeholderString = "Choose, drop or paste the ISO"
@@ -384,7 +384,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc func chooseISO() {
         let panel = NSOpenPanel()
-        panel.title = "Choose the Parted Magic ISO"
+        panel.title = "Choose the Erase Station ISO"
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         if let iso = UTType(filenameExtension: "iso") { panel.allowedContentTypes = [iso] }
@@ -421,7 +421,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let info = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         biosCB.isEnabled = true
         if p.terminationStatus != 0 || info == nil {
-            var msg = "Not a Parted Magic ISO"
+            var msg = "Not an Erase Station ISO"
             for line in (String(decoding: data, as: UTF8.self) + "\n" + String(decoding: edata, as: UTF8.self)).split(separator: "\n")
             where line.hasPrefix("{") {
                 if let o = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any], let m = o["message"] as? String {
@@ -479,7 +479,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         var text = "\(d.model), \(human(d.size)), \(d.usb ? "USB" : "not USB"), serial \(d.serial.isEmpty ? "unknown" : d.serial)\n"
             + "Device \(d.path)\n\n\(isoName(info))\(build) will be installed from:\n\(iso)\n\nThis cannot be undone."
         if d.usb && !d.removable {
-            text += "\n\nThis device reports itself as a hard drive. Parted Magic will take about 10 seconds longer to find it at boot."
+            text += "\n\nThis device reports itself as a hard drive. Erase Station will take about 10 seconds longer to find it at boot."
         }
         let a = NSAlert()
         a.alertStyle = .warning
@@ -616,7 +616,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let a = NSAlert()
         switch result?.0 ?? "error" {
         case "done":
-            a.messageText = "Parted Magic is on the drive"
+            a.messageText = "Erase Station is on the drive"
             a.informativeText = result?.1 ?? ""
         case "canceled":
             a.alertStyle = .warning

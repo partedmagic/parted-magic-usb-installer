@@ -90,7 +90,7 @@ fun human(v: Double): String {
 /** What the window calls the ISO: "Parted Magic 26.10", else its volume
  *  label, else its file name. */
 fun isoName(info: JSONObject): String =
-    info.optString("Version").takeIf { it.isNotEmpty() }?.let { "Parted Magic $it" }
+    info.optString("Version").takeIf { it.isNotEmpty() }?.let { "Erase Station $it" }
         ?: info.optString("Label").ifEmpty { State.isoName }
 
 /** Everything the window shows. It lives outside the activity, so an
@@ -254,7 +254,7 @@ class MainActivity : ComponentActivity() {
                     null
                 } else null
                 if (info == null) {
-                    var msg = "Not a Parted Magic ISO"
+                    var msg = "Not an Erase Station ISO"
                     for (l in lines) if (l.startsWith("{")) try {
                         JSONObject(l).optString("message").takeIf { it.isNotEmpty() }?.let { msg = it }
                     } catch (_: Exception) {
@@ -381,7 +381,7 @@ class MainActivity : ComponentActivity() {
             "${d.optString("Model")}, ${human(d.optDouble("Size"))}, USB, serial ${d.optString("Serial").ifEmpty { "unknown" }}\n\n" +
             "${isoName(i)}$build will be installed from:\n${State.isoName}\n\nThis cannot be undone."
         if (!d.optBoolean("Removable", true)) {
-            text += "\n\nThis device reports itself as a hard drive. Parted Magic will take about 10 seconds longer to find it at boot."
+            text += "\n\nThis device reports itself as a hard drive. Erase Station will take about 10 seconds longer to find it at boot."
         }
         State.confirm = text
     }
@@ -499,7 +499,7 @@ class MainActivity : ComponentActivity() {
                 State.fileLine = ""
                 State.resultKind = "done"
                 // The core names the target "usb:"; say which drive it was.
-                val name = State.iso?.let { isoName(it) } ?: "Parted Magic"
+                val name = State.iso?.let { isoName(it) } ?: "Erase Station"
                 val model = State.drive?.optString("Model") ?: "the USB drive"
                 State.resultText = "$name written to $model.\n$note Took ${secs / 60} min ${secs % 60} s.\n" +
                     "The drive has been ejected. You can unplug it."
@@ -517,7 +517,7 @@ class MainActivity : ComponentActivity() {
         State.driveStatus = ""
         refresh()
         val r = when (State.resultKind) {
-            "done" -> "Parted Magic is on the drive" to State.resultText
+            "done" -> "Erase Station is on the drive" to State.resultText
             "canceled" -> "Canceled" to "The drive has no partition table. Run the installer again to use it."
             else -> "The installer failed" to State.resultText.ifEmpty { "The installer stopped with exit code $rc. See Details." }
         }
@@ -550,9 +550,9 @@ class MainActivity : ComponentActivity() {
                 Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text("Parted Magic USB Installer", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text("Erase Station USB Installer", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
 
-                Text("Parted Magic ISO", fontWeight = FontWeight.SemiBold)
+                Text("Erase Station ISO", fontWeight = FontWeight.SemiBold)
                 Text(
                     State.isoName.ifEmpty { "No ISO chosen" },
                     maxLines = 3, overflow = TextOverflow.Ellipsis,

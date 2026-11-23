@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds "Parted Magic USB Installer.app" on a Mac with the Command Line Tools.
+# Builds "Erase Station USB Installer.app" on a Mac with the Command Line Tools.
 # Usage: build-mac.sh PMUSB_CORE OUTDIR [IDENTITY]
 #   PMUSB_CORE  the darwin/arm64 pmusb core (cross-built on the host:
 #               GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build)
@@ -12,7 +12,7 @@ set -e
 here=$(cd "$(dirname "$0")" && pwd)
 core=$1; out=$2; id=${3:-}
 [ -x "$core" ] && [ -n "$out" ] || { echo "usage: $0 PMUSB_CORE OUTDIR [IDENTITY]" >&2; exit 2; }
-app="$out/Parted Magic USB Installer.app"
+app="$out/Erase Station USB Installer.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 swiftc -O -swift-version 5 -target arm64-apple-macos26.5 \
